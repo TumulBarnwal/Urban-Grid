@@ -1,0 +1,27 @@
+# Dependencies
+frontend/node_modules/
+backend/node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment variables
+.env
+.env.*
+
+# Backups
+frontend-backup/
+
+# Generated files
+dist/
+build/
+*.log
+
+# SUMO generated files
+*.rou.alt.xml
+*.tripinfo.xml
+*.emission.xml
+*.netstate.xml
