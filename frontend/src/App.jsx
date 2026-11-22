@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
@@ -12,71 +12,145 @@ import Architecture from "./pages/Architecture";
 
 import "./App.css";
 
+const API_URL = "http://localhost:5000/api/emergency-requests";
+
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
-
-  // Store all emergency requests
   const [emergencyRequests, setEmergencyRequests] = useState([]);
 
-  // Add a new emergency request
-  const addEmergencyRequest = (request) => {
-    setEmergencyRequests((previousRequests) => [
-      ...previousRequests,
-      request,
-    ]);
-  };
+  // Fetch emergency requests from MongoDB
+  const fetchEmergencyRequests = useCallback(async () => {
+    try {
+      const response = await fetch(API_URL);
+      const data = await response.json();
 
-  // Update the status of a specific emergency vehicle
-  const updateEmergencyStatus = (vehicleId, newStatus) => {
-    setEmergencyRequests((previousRequests) =>
-      previousRequests.map((request) =>
-        request.vehicleId === vehicleId
-          ? { ...request, status: newStatus }
-          : request
-      )
-    );
-  };
-
-  // Complete an emergency request
-  const completeEmergencyRequest = (vehicleId) => {
-    updateEmergencyStatus(vehicleId, "Completed");
-  };
-
-  // Assign priority scores to emergency vehicle types
-  const getPriorityScore = (vehicleType) => {
-    if (vehicleType === "Ambulance") return 3;
-
-    if (
-      vehicleType === "Police" ||
-      vehicleType === "Fire Truck"
-    ) {
-      return 2;
-    }
-
-    return 1;
-  };
-
-  // Keep completed requests in history, but remove them from the active queue
-  const sortedRequests = emergencyRequests
-    .filter((request) => request.status !== "Completed")
-    .sort((a, b) => {
-      const priorityDifference =
-        getPriorityScore(b.vehicleType) -
-        getPriorityScore(a.vehicleType);
-
-      if (priorityDifference !== 0) {
-        return priorityDifference;
+      if (!response.ok) {
+        throw new Error(data.message || "Could not fetch requests.");
       }
 
-      return (
-        new Date(`1970-01-01T${a.requestedAt}`) -
-        new Date(`1970-01-01T${b.requestedAt}`)
+      setEmergencyRequests(data.requests || []);
+    } catch (error) {
+      console.error("Error fetching emergency requests:", error);
+    }
+  }, []);
+
+  // Fetch requests on startup and refresh every 3 seconds
+  useEffect(() => {
+    fetchEmergencyRequests();
+
+    const interval = setInterval(fetchEmergencyRequests, 3000);
+
+    return () => clearInterval(interval);
+  }, [fetchEmergencyRequests]);
+
+  // Submit a new manual emergency request
+  const addEmergencyRequest = async (request) => {
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          vehicleId: request.vehicleId,
+          vehicleType: request.vehicleType,
+          intersectionId: request.intersection,
+          approach: request.approach,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Request submission failed.");
+      }
+
+      await fetchEmergencyRequests();
+
+      return data;
+    } catch (error) {
+      console.error("Error submitting emergency request:", error);
+      throw error;
+    }
+  };
+
+  // Activate emergency priority through the backend
+  const updateEmergencyStatus = async (vehicleId, newStatus) => {
+    if (newStatus !== "Priority Active") return;
+
+    const request = emergencyRequests.find(
+      (item) => item.vehicleId === vehicleId
+    );
+
+    if (!request) return;
+
+    try {
+      const response = await fetch(
+        `${API_URL}/${request._id}/activate`,
+        {
+          method: "PATCH",
+        }
       );
-    });
 
-  // Highest-priority active request
-  const activeEmergencyRequest = sortedRequests[0] || null;
+      const data = await response.json();
 
+      if (!response.ok) {
+        throw new Error(data.message || "Could not activate priority.");
+      }
+
+      await fetchEmergencyRequests();
+
+    } catch (error) {
+      console.error("Error activating emergency priority:", error);
+      alert(error.message);
+    }
+  };
+
+  // Complete an active emergency request through the backend
+  const completeEmergencyRequest = async (vehicleId) => {
+    try {
+      const request = emergencyRequests.find(
+        (item) => item.vehicleId === vehicleId
+      );
+
+      if (!request) return;
+
+      const response = await fetch(
+        `${API_URL}/${request._id}/complete`,
+        {
+          method: "PATCH",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Could not complete request.");
+      }
+
+      await fetchEmergencyRequests();
+
+    } catch (error) {
+      console.error("Error completing emergency request:", error);
+      alert(error.message);
+    }
+  };
+
+  // Convert backend data into the format used by existing UI pages
+  const sortedRequests = emergencyRequests.map((request) => ({
+    ...request,
+    intersection: request.intersectionId,
+    requestedAt: new Date(request.createdAt).toLocaleTimeString(),
+    status: request.status,
+  }));
+
+  // Only an actually activated request is considered active
+  const activeEmergencyRequest =
+    sortedRequests.find(
+      (request) => request.status === "Priority Active"
+    ) || sortedRequests[0] || null;
+
+  // Render selected page
   const renderPage = () => {
     switch (activePage) {
       case "Emergency Control":
@@ -93,7 +167,6 @@ function App() {
         return (
           <RequestMonitor
             setEmergencyRequest={addEmergencyRequest}
-            emergencyRequests={emergencyRequests}
           />
         );
 

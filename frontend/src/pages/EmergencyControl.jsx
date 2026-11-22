@@ -13,21 +13,19 @@ function EmergencyControl({
   updateEmergencyStatus,
   completeEmergencyRequest,
 }) {
-  // Activate priority for the current emergency vehicle
-  const handlePriority = () => {
+  const handlePriority = async () => {
     if (!emergencyRequest) return;
 
-    updateEmergencyStatus(
+    await updateEmergencyStatus(
       emergencyRequest.vehicleId,
       "Priority Active"
     );
   };
 
-  // Mark the current emergency request as completed
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!emergencyRequest) return;
 
-    completeEmergencyRequest(emergencyRequest.vehicleId);
+    await completeEmergencyRequest(emergencyRequest.vehicleId);
   };
 
   const priorityActive =
@@ -53,18 +51,14 @@ function EmergencyControl({
       <div className="stats-grid">
         <div className="stat-card">
           <span>Active Requests</span>
-          <strong>
-            {String(emergencyRequests.length).padStart(2, "0")}
-          </strong>
-          <small>Requires attention</small>
+          <strong>{String(emergencyRequests.length).padStart(2, "0")}</strong>
+          <small>Pending and active</small>
         </div>
 
         <div className="stat-card">
           <span>Emergency Vehicles</span>
-          <strong>
-            {String(emergencyRequests.length).padStart(2, "0")}
-          </strong>
-          <small>Currently detected</small>
+          <strong>{String(emergencyRequests.length).padStart(2, "0")}</strong>
+          <small>Currently registered</small>
         </div>
 
         <div className="stat-card">
@@ -75,8 +69,8 @@ function EmergencyControl({
 
         <div className="stat-card">
           <span>Completed Today</span>
-          <strong>04</strong>
-          <small>Successful clearances</small>
+          <strong>--</strong>
+          <small>Not connected yet</small>
         </div>
       </div>
 
@@ -87,7 +81,7 @@ function EmergencyControl({
               <h3>Incoming Emergency</h3>
               <p>
                 {emergencyRequest
-                  ? "Highest priority request"
+                  ? "Selected emergency request"
                   : "Waiting for emergency requests"}
               </p>
             </div>
@@ -108,11 +102,15 @@ function EmergencyControl({
                     {emergencyRequest.intersection}
                   </span>
                   <small>
-                    Priority requested at {emergencyRequest.requestedAt}
+                    Requested at {emergencyRequest.requestedAt}
                   </small>
                 </div>
 
-                <span className="priority">HIGH</span>
+                <span className="priority">
+                  {emergencyRequest.vehicleType === "Ambulance"
+                    ? "HIGHEST"
+                    : "HIGH"}
+                </span>
               </div>
 
               <div className="request-admin-details">
@@ -186,9 +184,9 @@ function EmergencyControl({
               emergencyRequests.map((request, index) => (
                 <div
                   className={`queue-item ${
-                    index === 0 ? "queue-active" : ""
+                    request.status === "Priority Active" ? "queue-active" : ""
                   }`}
-                  key={`${request.vehicleId}-${request.requestedAt}`}
+                  key={request._id}
                 >
                   <div className="queue-rank">#{index + 1}</div>
 
@@ -204,11 +202,7 @@ function EmergencyControl({
                     {request.status === "Priority Active" ? (
                       <span className="queue-priority">ACTIVE</span>
                     ) : (
-                      <span className="queue-waiting">
-                        {request.status === "Pending"
-                          ? "QUEUED"
-                          : request.status.toUpperCase()}
-                      </span>
+                      <span className="queue-waiting">QUEUED</span>
                     )}
                   </div>
                 </div>

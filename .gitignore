@@ -25,3 +25,4 @@ build/
 *.tripinfo.xml
 *.emission.xml
 *.netstate.xml
+!*.env.example

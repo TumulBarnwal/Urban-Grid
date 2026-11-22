@@ -1,12 +1,16 @@
 
 const express = require("express");
 const cors = require("cors");
+const mongoose = require("mongoose");
 require("dotenv").config();
+
+const emergencyRoutes = require("./routes/emergencyRoutes");
 
 const app = express();
 
 const PORT = process.env.PORT || 5000;
-const PYTHON_SERVICE_URL = "http://127.0.0.1:8000";
+const PYTHON_SERVICE_URL =
+  process.env.PYTHON_SERVICE_URL || "http://127.0.0.1:8000";
 
 // Middleware
 app.use(
@@ -16,6 +20,9 @@ app.use(
 );
 
 app.use(express.json());
+
+// Emergency request routes
+app.use("/api/emergency-requests", emergencyRoutes);
 
 // Home route
 app.get("/", (req, res) => {
@@ -31,7 +38,7 @@ app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
     status: "healthy",
-    message: "Backend is ready to receive requests.",
+    mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
     timestamp: new Date().toISOString(),
   });
 });
@@ -67,12 +74,30 @@ app.use((req, res) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log("------------------------------------");
-  console.log("       URBANGRID BACKEND");
-  console.log("------------------------------------");
-  console.log(`Server running at http://localhost:${PORT}`);
-  console.log(`Python service: ${PYTHON_SERVICE_URL}`);
-  console.log("Status: Ready");
-});
+// Connect to MongoDB, then start server
+async function startServer() {
+  try {
+    if (!process.env.MONGODB_URI) {
+      throw new Error("MONGODB_URI is missing from the .env file.");
+    }
+
+    await mongoose.connect(process.env.MONGODB_URI);
+
+    console.log("MongoDB connected successfully!");
+
+    app.listen(PORT, () => {
+      console.log("------------------------------------");
+      console.log("       URBANGRID BACKEND");
+      console.log("------------------------------------");
+      console.log(`Server running at http://localhost:${PORT}`);
+      console.log(`Python service: ${PYTHON_SERVICE_URL}`);
+      console.log("MongoDB: Connected");
+      console.log("Status: Ready");
+    });
+  } catch (error) {
+    console.error("Server startup failed:", error.message);
+    process.exit(1);
+  }
+}
+
+startServer();
